@@ -36,6 +36,9 @@ números de página visibles y `next_page_url`. Cada `SearchResult` incluye tít
 tipo, URL, identificador, portada, descripción, colaboradores y formatos
 disponibles. Los nombres de los colaboradores se agrupan por etiqueta del sitio
 (por ejemplo, `autor`, `director` o `actores principales`).
+Los modelos son `NamedTuple` y sus colecciones se exponen como tuplas. Cada
+colaborador es un `Contributor` con `role` y `names`, para evitar modificaciones
+accidentales de los resultados devueltos.
 
 Los filtros admitidos son `isbn`, `author`, `narrator`, `director`, `actor`,
 `publisher`, `collection_title`, `issued_on_range`, `language`, `audience`,
@@ -75,3 +78,19 @@ del propio catálogo; no realiza préstamos ni inicia sesión.
 ```sh
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
+
+## Construir y publicar
+
+El script `publish.sh` ejecuta las pruebas, construye y valida los
+paquetes. Por defecto sube a TestPyPI; `--pypi` selecciona la publicación real
+y solicita confirmación. Usa `--dry-run` para validar todo sin subir nada:
+
+```sh
+bash publish.sh --dry-run
+bash publish.sh --testpypi
+bash publish.sh --pypi
+```
+
+Twine solicita las credenciales de forma interactiva. Para PyPI, utiliza
+`__token__` como usuario y escribe el token en la solicitud de contraseña; no
+lo añadas al repositorio ni a la línea de comandos.

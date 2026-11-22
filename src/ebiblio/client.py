@@ -140,7 +140,7 @@ class EbiblioClient:
         *,
         max_pages: int = 100,
         **filters: Any,
-    ) -> list[SearchResult]:
+    ) -> tuple[SearchResult, ...]:
         """Recorre páginas siguientes hasta el final o ``max_pages``."""
         if max_pages < 1:
             raise ValueError("max_pages debe ser un entero positivo.")
@@ -159,4 +159,4 @@ class EbiblioClient:
                 if next_page and next_page[0].isdigit()
                 else page + 1
             )
-        return results
+        return tuple(results)

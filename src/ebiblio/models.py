@@ -1,10 +1,9 @@
-"""Modelos de datos devueltos por el cliente."""
+"""Modelos inmutables de datos devueltos por el cliente."""
 
-from dataclasses import dataclass, field
+from typing import NamedTuple
 
 
-@dataclass(frozen=True)
-class Medium:
+class Medium(NamedTuple):
     """Una edición o medio disponible para un recurso del catálogo."""
 
     format: str
@@ -16,8 +15,14 @@ class Medium:
     accessible: bool = False
 
 
-@dataclass(frozen=True)
-class SearchResult:
+class Contributor(NamedTuple):
+    """Colaborador asociado a un recurso y sus nombres."""
+
+    role: str
+    names: tuple[str, ...]
+
+
+class SearchResult(NamedTuple):
     """Un libro, película u otro recurso del catálogo."""
 
     title: str
@@ -26,20 +31,26 @@ class SearchResult:
     resource_id: str | None = None
     cover_url: str | None = None
     description: str | None = None
-    contributors: dict[str, list[str]] = field(default_factory=dict)
-    media: list[Medium] = field(default_factory=list)
+    contributors: tuple[Contributor, ...] = ()
+    media: tuple[Medium, ...] = ()
 
     @property
-    def authors(self) -> list[str]:
+    def authors(self) -> tuple[str, ...]:
         """Devuelve los colaboradores etiquetados como autor."""
-        return self.contributors.get("autor", [])
+        return next(
+            (
+                contributor.names
+                for contributor in self.contributors
+                if contributor.role == "autor"
+            ),
+            (),
+        )
 
 
-@dataclass(frozen=True)
-class SearchResults:
+class SearchResults(NamedTuple):
     """Página de resultados e información para continuar la paginación."""
 
-    items: list[SearchResult]
+    items: tuple[SearchResult, ...]
     current_page: int = 1
-    page_numbers: list[int] = field(default_factory=list)
+    page_numbers: tuple[int, ...] = ()
     next_page_url: str | None = None

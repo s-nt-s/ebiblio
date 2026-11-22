@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from ebiblio.cli import main
-from ebiblio.models import SearchResult, SearchResults
+from ebiblio.models import Contributor, SearchResult, SearchResults
 
 
 class EbiblioCliTests(unittest.TestCase):
@@ -14,10 +14,10 @@ class EbiblioCliTests(unittest.TestCase):
             title="Fun home",
             url="https://madrid.ebiblio.es/resources/book-123",
             resource_type="Book",
-            contributors={"autor": ["Alison Bechdel"]},
+            contributors=(Contributor("autor", ("Alison Bechdel",)),),
         )
         page = SearchResults(
-            items=[result],
+            items=(result,),
             current_page=1,
             next_page_url="https://madrid.ebiblio.es/resources?page=2",
         )
@@ -45,6 +45,10 @@ class EbiblioCliTests(unittest.TestCase):
         )
         output = json.loads(stdout.getvalue())
         self.assertEqual(output["items"][0]["title"], "Fun home")
+        self.assertEqual(
+            output["items"][0]["contributors"],
+            {"autor": ["Alison Bechdel"]},
+        )
         self.assertEqual(output["next_page_url"], page.next_page_url)
 
     def test_network_errors_return_nonzero(self):

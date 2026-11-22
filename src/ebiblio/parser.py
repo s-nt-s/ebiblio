@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional
+from typing import Mapping, NamedTuple
 from types import MappingProxyType
 from html.parser import HTMLParser
 import re
 from urllib.parse import urljoin
 
-from .models import Medium, SearchResult, SearchResults
+from .models import Contributor, Medium, SearchResult, SearchResults
 
 
 class _Node(NamedTuple):
     tag: str
-    attrs: MappingProxyType[str, str]
-    parent: Optional["_Node"]
-    children: list["_Node | str"]
+    attrs: Mapping[str, str]
+    children: tuple["_Node | str", ...]
 
     def text(self) -> str:
         parts = []
@@ -45,23 +44,34 @@ class _TreeParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.root = _Node(
-            tag="document",
-            attrs=MappingProxyType({}),
-            parent=None,
-            children=[],
+            "document",
+            MappingProxyType({}),
+            (),
         )
         self.stack = [self.root]
+        self._child_lists: dict[int, list[_Node | str]] = {id(self.root): []}
+
+    def finish(self) -> _Node:
+        """Devuelve el árbol congelado una vez construido."""
+        return self._freeze(self.root)
+
+    def _freeze(self, node: _Node) -> _Node:
+        children = tuple(
+            self._freeze(child) if isinstance(child, _Node) else child
+            for child in self._child_lists[id(node)]
+        )
+        return _Node(node.tag, node.attrs, children)
 
     def handle_starttag(
         self, tag: str, attrs: list[tuple[str, str | None]]
     ) -> None:
         node = _Node(
-            tag=tag,
-            attrs=MappingProxyType({key: value or "" for key, value in attrs}),
-            parent=self.stack[-1],
-            children=[],
+            tag,
+            MappingProxyType({key: value or "" for key, value in attrs}),
+            (),
         )
-        self.stack[-1].children.append(node)
+        self._child_lists[id(self.stack[-1])].append(node)
+        self._child_lists[id(node)] = []
         if tag not in self._void_tags:
             self.stack.append(node)
 
@@ -80,7 +90,7 @@ class _TreeParser(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         if data:
-            self.stack[-1].children.append(data)
+            self._child_lists[id(self.stack[-1])].append(data)
 
 
 def _first(
@@ -143,9 +153,14 @@ def _parse_item(article: _Node, base_url: str) -> SearchResult | None:
     if not title:
         return None
 
-    title_link = None
-    if heading and heading.parent and heading.parent.tag == "a":
-        title_link = heading.parent
+    title_link = next(
+        (
+            link
+            for link in article.descendants("a")
+            if any(child is heading for child in link.descendants())
+        ),
+        None,
+    )
     resource_path = (
         article.attrs.get("itemtype", "")
         .rstrip("/")
@@ -163,7 +178,7 @@ def _parse_item(article: _Node, base_url: str) -> SearchResult | None:
     description_node = _first(
         article, tag="p", class_name="details-content__body"
     )
-    contributors: dict[str, list[str]] = {}
+    contributors: list[Contributor] = []
     details = _first(article, class_name="details-content__adnl-info")
     if details:
         for row in details.descendants():
@@ -192,15 +207,15 @@ def _parse_item(article: _Node, base_url: str) -> SearchResult | None:
                 if name and name.casefold() != "none" and name not in names:
                     names.append(name)
             if names:
-                contributors[label] = names
+                contributors.append(Contributor(label, tuple(names)))
 
-    media = [
+    media = tuple(
         _parse_medium(node, base_url)
         for node in article.descendants()
         if node.tag == "div"
         and node.has_class("medium")
         and node.has_class("transaction")
-    ]
+    )
     resource_url = title_link.attrs.get("href") if title_link else None
     if not resource_url:
         resource_link = next(
@@ -229,7 +244,7 @@ def _parse_item(article: _Node, base_url: str) -> SearchResult | None:
         description=(
             description_node.text().strip() if description_node else None
         ),
-        contributors=contributors,
+        contributors=tuple(contributors),
         media=media,
     )
 
@@ -238,21 +253,22 @@ def parse_search_results(html: str, base_url: str) -> SearchResults:
     """Convierte HTML del catálogo en modelos Python."""
     parser = _TreeParser()
     parser.feed(html)
+    root = parser.finish()
     articles = (
         node
-        for node in parser.root.descendants("article")
+        for node in root.descendants("article")
         if node.has_class("view-details")
     )
-    items = [
+    items = tuple(
         item
         for article in articles
         if (item := _parse_item(article, base_url))
-    ]
+    )
 
     pagination = next(
         (
             node
-            for node in parser.root.descendants("nav")
+            for node in root.descendants("nav")
             if node.has_class("pagination")
         ),
         None,
@@ -261,15 +277,18 @@ def parse_search_results(html: str, base_url: str) -> SearchResults:
     current_page = 1
     next_href = None
     if pagination:
+        next_wrapper = _first(pagination, class_name="next")
         for node in pagination.descendants():
             if node.tag == "span" and node.has_class("current"):
                 match = re.search(r"\d+", node.text())
                 if match:
                     current_page = int(match.group())
             if node.tag == "a":
-                if "next" in node.attrs.get("rel", "").split() or (
-                    node.parent is not None and node.parent.has_class("next")
-                ):
+                is_in_next_wrapper = next_wrapper and any(
+                    child is node for child in next_wrapper.descendants("a")
+                )
+                is_next_link = "next" in node.attrs.get("rel", "").split()
+                if is_next_link or is_in_next_wrapper:
                     next_href = node.attrs.get("href") or None
                 match = re.fullmatch(r"\s*\d+\s*", node.text())
                 if match:
@@ -277,6 +296,6 @@ def parse_search_results(html: str, base_url: str) -> SearchResults:
     return SearchResults(
         items=items,
         current_page=current_page,
-        page_numbers=sorted(set(page_numbers)),
+        page_numbers=tuple(sorted(set(page_numbers))),
         next_page_url=_absolute(base_url, next_href),
     )

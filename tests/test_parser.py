@@ -1,17 +1,20 @@
 import unittest
 
 from ebiblio.parser import _TreeParser, parse_search_results
+from ebiblio.models import Contributor
 
 
 class ParseSearchResultsTests(unittest.TestCase):
     def test_namedtuple_nodes_have_independent_children(self):
         parser = _TreeParser()
         parser.feed("<div><span>uno</span><span>dos</span></div>")
+        root = parser.finish()
 
-        div = parser.root.children[0]
-        self.assertIsNot(parser.root.children, div.children)
+        div = root.children[0]
+        self.assertIsInstance(root.children, tuple)
+        self.assertIsInstance(div.children, tuple)
         self.assertEqual(
-            [node.text() for node in parser.root.descendants("span")],
+            [node.text() for node in root.descendants("span")],
             ["uno", "dos"],
         )
 
@@ -71,7 +74,10 @@ class ParseSearchResultsTests(unittest.TestCase):
             "https://madrid.ebiblio.es/covers/book.jpg",
         )
         self.assertEqual(item.description, "Una memoria & una historia.")
-        self.assertEqual(item.authors, ["Alison Bechdel"])
+        self.assertEqual(item.authors, ("Alison Bechdel",))
+        self.assertIsInstance(item.contributors[0], Contributor)
+        self.assertEqual(item.contributors[0].role, "autor")
+        self.assertEqual(item.contributors[0].names, ("Alison Bechdel",))
         self.assertEqual(item.media[0].format, "EPUB")
         self.assertEqual(item.media[0].availability_count, 3)
         self.assertTrue(item.media[0].streaming)
@@ -81,7 +87,11 @@ class ParseSearchResultsTests(unittest.TestCase):
             "https://madrid.ebiblio.es/media/file/loans_confirmation",
         )
         self.assertEqual(results.current_page, 1)
-        self.assertEqual(results.page_numbers, [2])
+        self.assertEqual(results.page_numbers, (2,))
+        self.assertIsInstance(results.items, tuple)
+        self.assertIsInstance(item.contributors, tuple)
+        self.assertIsInstance(item.contributors[0].names, tuple)
+        self.assertIsInstance(item.media, tuple)
         self.assertEqual(
             results.next_page_url,
             "https://madrid.ebiblio.es/resources?page=2&q=fun",
@@ -92,7 +102,7 @@ class ParseSearchResultsTests(unittest.TestCase):
             '<article class="view-details"><p>sin título</p></article>',
             "https://madrid.ebiblio.es/",
         )
-        self.assertEqual(results.items, [])
+        self.assertEqual(results.items, ())
 
 
 if __name__ == "__main__":

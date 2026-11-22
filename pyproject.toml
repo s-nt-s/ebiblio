@@ -12,6 +12,11 @@ license = { file = "LICENSE" }
 authors = [{ name = "eBiblio Client contributors" }]
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/s-nt-s/ebiblio"
+Repository = "https://github.com/s-nt-s/ebiblio"
+Issues = "https://github.com/s-nt-s/ebiblio/issues"
+
 [project.scripts]
 ebiblio = "ebiblio.cli:main"
 

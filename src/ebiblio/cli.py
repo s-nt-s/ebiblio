@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import json
 import sys
 from typing import Sequence
@@ -110,8 +109,11 @@ def _print_result(item: SearchResult, index: int) -> None:
     kind = item.resource_type or "Recurso"
     print(f"{index}. {item.title} [{kind}]")
     print(f"   {item.url}")
-    for role, names in item.contributors.items():
-        print(f"   {role.capitalize()}: {', '.join(names)}")
+    for contributor in item.contributors:
+        print(
+            f"   {contributor.role.capitalize()}: "
+            f"{', '.join(contributor.names)}"
+        )
     if item.description:
         print(f"   {item.description}")
     for medium in item.media:
@@ -149,7 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.json:
         payload: dict[str, object] = {
-            "items": [asdict(item) for item in items]
+            "items": [_result_to_dict(item) for item in items]
         }
         if page_result is not None:
             payload.update(
@@ -172,6 +174,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.all_pages:
         print(f"Total de recursos recuperados: {len(items)}")
     return 0
+
+
+def _result_to_dict(item: SearchResult) -> dict[str, object]:
+    """Serializa el NamedTuple a un objeto JSON de estructura legible."""
+    return {
+        "title": item.title,
+        "url": item.url,
+        "resource_type": item.resource_type,
+        "resource_id": item.resource_id,
+        "cover_url": item.cover_url,
+        "description": item.description,
+        "contributors": {
+            contributor.role: contributor.names
+            for contributor in item.contributors
+        },
+        "media": [medium._asdict() for medium in item.media],
+    }
 
 
 if __name__ == "__main__":
