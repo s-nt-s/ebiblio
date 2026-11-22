@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
-from ebiblio import EbiblioClient
+from ebiblio import EbiblioClient, SearchQuery
 
 
 class EbiblioClientTests(unittest.TestCase):
@@ -14,11 +14,12 @@ class EbiblioClientTests(unittest.TestCase):
             self.client, "_fetch", return_value="<html></html>"
         ) as fetch:
             self.client.search(
-                "El hombre",
-                author="Alison Bechdel",
-                language="spa",
-                availability=True,
-                medium=None,
+                SearchQuery(
+                    keywords="El hombre",
+                    author="Alison Bechdel",
+                    language="spa",
+                    availability="available",
+                ),
             )
 
         request_url = fetch.call_args.args[0]
@@ -32,23 +33,40 @@ class EbiblioClientTests(unittest.TestCase):
         self.assertEqual(query["page"], ["1"])
         self.assertNotIn("medium", query)
 
-    def test_accepts_q_alias_and_rejects_unknown_filter(self):
+    def test_search_sends_requested_page(self):
         with patch.object(
             self.client, "_fetch", return_value="<html></html>"
         ) as fetch:
-            self.client.search(q="Mabuse")
+            self.client.search(SearchQuery(keywords="Mabuse"), page=3)
+
+        query = parse_qs(urlsplit(fetch.call_args.args[0]).query)
+        self.assertEqual(query["page"], ["3"])
+
+    def test_search_uses_fields_from_search_query(self):
+        with patch.object(
+            self.client, "_fetch", return_value="<html></html>"
+        ) as fetch:
+            self.client.search(SearchQuery(keywords="Mabuse"))
         self.assertEqual(
             parse_qs(urlsplit(fetch.call_args.args[0]).query)["keywords"],
             ["Mabuse"],
         )
+        self.assertEqual(
+            parse_qs(urlsplit(fetch.call_args.args[0]).query)[
+                "category_standard"
+            ],
+            ["ebiblio"],
+        )
+
+    def test_search_requires_search_query(self):
         with self.assertRaises(TypeError):
-            self.client.search("Mabuse", made_up_filter="x")
+            self.client.search("Mabuse")
 
     def test_validates_url_and_page(self):
         with self.assertRaises(ValueError):
             EbiblioClient("madrid.ebiblio.es")
         with self.assertRaises(ValueError):
-            self.client.search("Mabuse", page=0)
+            self.client.search(SearchQuery(keywords="Mabuse"), page=0)
 
 
 if __name__ == "__main__":

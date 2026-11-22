@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ebiblio-client"
-version = "0.1.0"
+version = "1.0.0"
 description = "Cliente Python sin dependencias externas para buscar en catálogos eBiblio compatibles."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,7 @@ Issues = "https://github.com/s-nt-s/ebiblio/issues"
 
 [project.scripts]
 ebiblio = "ebiblio.cli:main"
+ebiblio-server = "ebiblio.server:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

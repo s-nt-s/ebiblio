@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from http.cookiejar import CookieJar
-from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
-from .models import SearchResult, SearchResults
+from .models import SearchQuery, SearchResult, SearchResults
 from .parser import parse_search_results
 
 
@@ -22,29 +21,11 @@ class EbiblioClient:
     Ejemplo::
 
         client = EbiblioClient("https://madrid.ebiblio.es/")
-        results = client.search("Mabuse", language="spa", nature="ebook")
+        query = SearchQuery(keywords="Mabuse", language="spa", nature="ebook")
+        results = client.search(query)
         for item in results.items:
             print(item.title, item.authors, item.url)
     """
-
-    _search_fields = {
-        "isbn",
-        "author",
-        "narrator",
-        "director",
-        "actor",
-        "publisher",
-        "collection_title",
-        "issued_on_range",
-        "language",
-        "audience",
-        "category",
-        "nature",
-        "medium",
-        "availability",
-        "category_standard",
-        "sort_by",
-    }
 
     def __init__(
         self,
@@ -58,9 +39,11 @@ class EbiblioClient:
             raise ValueError("La URL debe ser absoluta y usar http o https.")
         if timeout <= 0:
             raise ValueError("timeout debe ser mayor que cero.")
-        self.base_url = urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
-        self.timeout = timeout
-        self.user_agent = user_agent
+        self._base_url = urlunsplit(
+            (parsed.scheme, parsed.netloc, "/", "", "")
+        )
+        self._timeout = timeout
+        self._user_agent = user_agent
         self._cookies = CookieJar()
         self._opener = build_opener(HTTPCookieProcessor(self._cookies))
 
@@ -68,12 +51,12 @@ class EbiblioClient:
         request = Request(
             url,
             headers={
-                "User-Agent": self.user_agent,
+                "User-Agent": self._user_agent,
                 "Accept": "text/html,application/xhtml+xml",
             },
         )
         try:
-            with self._opener.open(request, timeout=self.timeout) as response:
+            with self._opener.open(request, timeout=self._timeout) as response:
                 charset = response.headers.get_content_charset() or "utf-8"
                 return response.read().decode(charset, errors="replace")
         except (HTTPError, URLError, OSError) as exc:
@@ -81,47 +64,30 @@ class EbiblioClient:
 
     def search(
         self,
-        keywords: str = "",
+        query: SearchQuery,
         *,
         page: int = 1,
-        **filters: Any,
     ) -> SearchResults:
         """Ejecuta una búsqueda y devuelve los recursos de la página indicada.
 
-        Los filtros aceptan los nombres del formulario web (por ejemplo,
-        ``author``, ``language``, ``category``, ``nature``, ``medium`` y
-        ``availability``). También se admite ``q`` como alias de ``keywords``.
+        Los términos y filtros se especifican en un ``SearchQuery``.
         """
+        if not isinstance(query, SearchQuery):
+            raise TypeError("query debe ser una instancia de SearchQuery.")
         if page < 1:
             raise ValueError("page debe ser un entero positivo.")
-        if "q" in filters:
-            if keywords:
-                raise TypeError("Usa keywords o q, pero no ambos.")
-            keywords = filters.pop("q")
 
-        unknown = set(filters) - self._search_fields
-        if unknown:
-            fields = ", ".join(sorted(unknown))
-            raise TypeError(f"Filtros no reconocidos: {fields}")
-
-        params: dict[str, str] = {
-            "category_standard": "ebiblio",
-            "page": str(page),
+        params = {
+            k: str(v) for k, v in
+            query._asdict().items()
+            if v not in (None, "")
         }
-        if keywords:
-            params["keywords"] = str(keywords)
-        for name, value in filters.items():
-            if value is None or value is False:
-                continue
-            if name == "availability" and value is True:
-                params[name] = "available"
-            else:
-                params[name] = str(value)
+        params["page"] = str(page)
 
-        search_url = urljoin(self.base_url, "/resources")
+        search_url = urljoin(self._base_url, "/resources")
         request_url = f"{search_url}?{urlencode(params)}"
         html = self._fetch(request_url)
-        parsed = parse_search_results(html, self.base_url)
+        parsed = parse_search_results(html, self._base_url)
         next_page_url = parsed.next_page_url
         return SearchResults(
             items=parsed.items,
@@ -136,10 +102,9 @@ class EbiblioClient:
 
     def search_all(
         self,
-        keywords: str = "",
+        query: SearchQuery,
         *,
         max_pages: int = 100,
-        **filters: Any,
     ) -> tuple[SearchResult, ...]:
         """Recorre páginas siguientes hasta el final o ``max_pages``."""
         if max_pages < 1:
@@ -147,7 +112,7 @@ class EbiblioClient:
         results: list[SearchResult] = []
         page = 1
         while page <= max_pages:
-            current = self.search(keywords, page=page, **filters)
+            current = self.search(query, page=page)
             results.extend(current.items)
             if not current.next_page_url:
                 break

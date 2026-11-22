@@ -7,18 +7,19 @@ Python.
 ## Uso
 
 ```python
-from ebiblio import EbiblioClient
+from ebiblio import EbiblioClient, SearchQuery
 
 catalog = EbiblioClient("https://madrid.ebiblio.es/")
 
 # Los nombres de filtros coinciden con los campos del formulario de búsqueda.
-page = catalog.search(
-    "Mabuse",
+query = SearchQuery(
+    keywords="Mabuse",
     author="Norbert Jacques",
     language="spa",
     nature="ebook",
-    availability=True,
+    availability="available",
 )
+page = catalog.search(query)
 
 for book in page.items:
     print(book.title, book.authors, book.url)
@@ -28,7 +29,7 @@ for book in page.items:
 print("Página siguiente:", page.next_page_url)
 
 # Recupera todas las páginas (máximo 100 por defecto).
-all_results = catalog.search_all("Mabuse", language="spa", max_pages=10)
+all_results = catalog.search_all(query, max_pages=10)
 ```
 
 `search()` devuelve `SearchResults`, que incluye `items`, `current_page`, los
@@ -43,8 +44,9 @@ accidentales de los resultados devueltos.
 Los filtros admitidos son `isbn`, `author`, `narrator`, `director`, `actor`,
 `publisher`, `collection_title`, `issued_on_range`, `language`, `audience`,
 `category`, `nature`, `medium` y `availability`. También se pueden usar
-`sort_by` y el alias `q` para las palabras clave. Para marcar disponibilidad,
-usa `availability=True`.
+`sort_by`. Se pasan como campos de `SearchQuery`; `keywords` contiene las
+palabras clave y `q` es su alias. Para limitar a títulos disponibles, usa
+`availability="available"`.
 
 ## Línea de comandos
 
@@ -60,6 +62,33 @@ ebiblio https://madrid.ebiblio.es/ homes --all --max-pages 5
 `--page` selecciona una página; `--all` recorre las páginas siguientes hasta
 `--max-pages`. `--json` emite los resultados estructurados. Consulta todas las
 opciones con `ebiblio --help`.
+
+## Servicio HTTP JSON
+
+Se incluye un servidor basado únicamente en la biblioteca estándar. Recibe una
+petición `GET /search` cuyos parámetros coinciden con los campos de
+`SearchQuery` y devuelve un array JSON plano con los resultados de todos los
+catálogos configurados. Define `EBIBLIO_URL` como una lista de URLs separadas
+por espacios:
+
+```sh
+export EBIBLIO_URL="https://madrid.ebiblio.es/ https://castillayleon.ebiblio.es/ https://murcia.ebiblio.es/"
+python -m ebiblio.server
+```
+
+Por defecto escucha solo en `127.0.0.1:8000`, consulta hasta 10 páginas por
+catálogo y acepta, por ejemplo:
+
+```sh
+curl --get 'http://127.0.0.1:8000/search' \
+    --data-urlencode 'keywords=Fun Home' \
+    --data-urlencode 'language=spa'
+```
+
+Se pueden ajustar `EBIBLIO_HOST`, `EBIBLIO_PORT` y `EBIBLIO_MAX_PAGES` (máximo
+100). No se acepta una URL de catálogo desde la petición: solo se consultan las
+URLs configuradas en `EBIBLIO_URL`. Mantén el servidor en localhost o protégelo
+con autenticación y límites de tráfico antes de exponerlo a una red pública.
 
 ## Instalación local
 

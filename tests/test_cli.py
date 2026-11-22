@@ -5,7 +5,12 @@ import unittest
 from unittest.mock import patch
 
 from ebiblio.cli import main
-from ebiblio.models import Contributor, SearchResult, SearchResults
+from ebiblio.models import (
+    Contributor,
+    SearchQuery,
+    SearchResult,
+    SearchResults,
+)
 
 
 class EbiblioCliTests(unittest.TestCase):
@@ -38,10 +43,13 @@ class EbiblioCliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         client_class.return_value.search.assert_called_once_with(
-            "Fun home",
+            SearchQuery(
+                keywords="Fun home",
+                author="Alison Bechdel",
+                availability="available",
+                category_standard="ebiblio",
+            ),
             page=1,
-            author="Alison Bechdel",
-            availability=True,
         )
         output = json.loads(stdout.getvalue())
         self.assertEqual(output["items"][0]["title"], "Fun home")

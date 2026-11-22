@@ -1,6 +1,6 @@
 """Modelos inmutables de datos devueltos por el cliente."""
 
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 
 class Medium(NamedTuple):
@@ -54,3 +54,23 @@ class SearchResults(NamedTuple):
     current_page: int = 1
     page_numbers: tuple[int, ...] = ()
     next_page_url: str | None = None
+
+
+class SearchQuery(NamedTuple):
+    keywords: Optional[str] = None
+    isbn: Optional[str] = None
+    author: Optional[str] = None
+    narrator: Optional[str] = None
+    director: Optional[str] = None
+    actor: Optional[str] = None
+    publisher: Optional[str] = None
+    collection_title: Optional[str] = None
+    issued_on_range: Optional[str] = None
+    language: Optional[str] = None
+    audience: Optional[str] = None
+    category: Optional[str] = None
+    nature: Optional[str] = None
+    medium: Optional[str] = None
+    availability: Optional[str] = None
+    category_standard: Optional[str] = "ebiblio"
+    sort_by: Optional[str] = None
