@@ -58,6 +58,7 @@ class SearchResults(NamedTuple):
 
 class SearchQuery(NamedTuple):
     keywords: Optional[str] = None
+    title: Optional[str] = None
     isbn: Optional[str] = None
     author: Optional[str] = None
     narrator: Optional[str] = None
